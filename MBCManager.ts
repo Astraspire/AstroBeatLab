@@ -11,41 +11,29 @@ import { PACK_ID_BITS } from './PackIdBitmask';
 import { simpleButtonEvent } from "UI_SimpleButtonEvent";
 
 /**
- * The MBCManager component ensures that at most one MBC25 beat machine
- * is active in the world at any given time.  It tracks which
- * variant (identified by its packId) is currently in use and which
- * player owns the machine.  When a new activation request comes in
- * via {@link requestMBCActivation}, the manager will either grant
- * control (if no machine is active or the same player already owns
- * one) or ignore the request.  Upon granting control it broadcasts
- * a {@link changeActiveMBC} event so that all {@link MBCDrop}
- * components can show or hide themselves appropriately.  The
- * manager also listens for {@link relinquishMBC} to release the
- * current lock and hide any active machine.  Additionally, if a
- * sound pack is unlocked and no machine is currently active, the
- * manager will automatically drop the newly unlocked machine.
+ * Coordinates exclusive access to MBC25 machines.
+ * Tracks the active pack, the performer holding control, and AFK timers.
+ * Grants or denies activation requests, broadcasts performer swaps, and clears control when needed.
  */
 class MBCManager extends hz.Component<typeof MBCManager> {
     static propsDefinition = {
-        // No configurable props are required at this time.
+        // No configurable props are exposed currently.
     };
 
-    /** The pack identifier of the currently active machine, or null if none. */
+    /** Pack identifier for the live machine, or null when nothing is active. */
     private activePack: string | null = null;
-    /** The name of the player currently controlling the machine, or null if none. */
+    /** Name of the performer currently in control, or null when unclaimed. */
     private controllingPlayer: string | null = null;
-    /** Timeout handles for players currently counting down to AFK relinquish. */
+    /** Timeout handles tracking AFK relinquish countdowns per player. */
     private afkTimeouts = new Map<string, number>();
 
     /**
-     * Key used to store per-player sound pack unlocks in persistent storage.
-     * This matches the constant defined in {@link MBC25Inventory}.
+     * Persistent storage key shared with MBC25Inventory for pack ownership tracking.
      */
     private readonly SOUND_PACKS_PPV = 'MBC25Inventory:unlockedSoundPacks';
 
     /**
-     * Determine whether a given player has unlocked a specific pack by checking
-     * the numeric bitmask stored in persistent storage.
+     * Checks persistent storage to confirm the player owns the requested packId.
      */
     private playerHasUnlocked(playerName: string, packId: string): boolean {
         const player = this.world
@@ -98,7 +86,7 @@ class MBCManager extends hz.Component<typeof MBCManager> {
         this.clearAfkTimeout(playerName);
     }
     preStart() {
-        // Listen for activation requests from the UI or other systems.
+        // Accept activation requests from UI and script callers.
         this.connectLocalEvent(
             this.entity!,
             requestMBCActivation,
@@ -109,7 +97,7 @@ class MBCManager extends hz.Component<typeof MBCManager> {
                     );
                     return;
                 }
-                // if active performer wants to change pack then broadcast change event
+                // Allow the current performer to swap packs without releasing control.
                 if (
                     !this.activePack ||
                     this.controllingPlayer === null ||
@@ -128,7 +116,7 @@ class MBCManager extends hz.Component<typeof MBCManager> {
             }
         );
 
-        // Listen for relinquish requests.
+        // Release ownership when the performer intentionally gives up the machine.
         this.connectLocalEvent(
             this.entity!,
             relinquishMBC,
@@ -161,7 +149,7 @@ class MBCManager extends hz.Component<typeof MBCManager> {
     }
 
     start() {
-        // No runtime initialization required.
+        // No additional startup logic required.
     }
 }
 

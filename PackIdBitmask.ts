@@ -1,6 +1,6 @@
 /**
- * Utilities for encoding unlocked pack identifiers into a numeric bitmask so
- * that Horizon's persistent storage can store the data as a single number.
+ * Helpers for encoding unlocked pack identifiers into numeric bitmasks so
+ * Horizon's persistent storage can persist them as a single value.
  */
 
 /** Mapping of pack identifiers to individual bit positions. */

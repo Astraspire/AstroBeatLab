@@ -10,13 +10,12 @@ import {
 import { addDefaultPacks, maskToPackList } from './PackIdBitmask';
 
 /**
- * Simple UI panel that lets players spend soundwave points on additional
- * beat packs. Packs are presented in a scrollable list and can be purchased
- * if the player has enough balance.
+ * Presents a storefront where players can spend soundwaves to unlock additional packs.
+ * Renders available packs, checks balances, and dispatches purchase events to SoundwaveManager.
  */
 class SoundwaveStoreUI extends UIComponent<typeof SoundwaveStoreUI> {
     static propsDefinition = {
-        // Soundwave Manager must be attached to manage points
+        // SoundwaveManager entity reference used to dispatch purchases.
         managerEntity: { type: hz.PropTypes.Entity },
     };
 
@@ -35,7 +34,7 @@ class SoundwaveStoreUI extends UIComponent<typeof SoundwaveStoreUI> {
     /** Message shown when no packs are available. */
     private emptyMessage = new Binding<string>('');
 
-    /** stores the active player controlling the UI. */
+    /** Name of the player currently controlling the store UI. */
     private uiOwner: string = "";
 
     private readonly STORE_PACKS = [
@@ -44,7 +43,7 @@ class SoundwaveStoreUI extends UIComponent<typeof SoundwaveStoreUI> {
         { packId: 'MBC25-PHONK-E-CHEESE', cost: 100},
     ];
 
-    /** Return the active shopper when set, otherwise fall back to the first connected player. */
+    /** Returns the active shopper when tracked, otherwise falls back to the first connected player. */
     private getCurrentPlayer(): Player | null {
         const players = this.world.getPlayers();
         if (this.uiOwner) {
@@ -66,7 +65,7 @@ class SoundwaveStoreUI extends UIComponent<typeof SoundwaveStoreUI> {
 
     override preStart() {
 
-        // Update balance when the manager notifies of changes.
+        // Refresh the store when the player's balance changes.
         this.connectLocalBroadcastEvent(
             soundwaveBalanceChanged,
             (payload: { playerName: string; balance: number }) => {
@@ -78,7 +77,7 @@ class SoundwaveStoreUI extends UIComponent<typeof SoundwaveStoreUI> {
             }
         );
 
-        // Remove purchased packs once the inventory updates.
+        // Remove newly purchased packs once the inventory updates.
         this.connectLocalBroadcastEvent(
             inventoryUpdated,
             ({ playerName }) => {
@@ -89,7 +88,7 @@ class SoundwaveStoreUI extends UIComponent<typeof SoundwaveStoreUI> {
             }
         );
 
-        // Show or refresh the store UI when a player triggers it.
+        // Make the store visible for the player who opened it.
         this.connectLocalEvent(
             this.entity,
             openSoundwaveStore,
@@ -169,7 +168,7 @@ class SoundwaveStoreUI extends UIComponent<typeof SoundwaveStoreUI> {
         }
     }
 
-    /** Build the initial root view for the store UI. */
+    /** Constructs the store layout and binds UI interactions. */
     initializeUI(): UINode {
         console.log('[SoundwaveStoreUI] initializeUI called.');
         return View({
@@ -182,7 +181,7 @@ class SoundwaveStoreUI extends UIComponent<typeof SoundwaveStoreUI> {
                     text: this.emptyMessage,
                     style: { fontSize: 20, color: 'gray' },
                 }),
-                // Allow manual refresh in case automatic events fail to fire
+                // Offer a manual refresh for testing and fallback scenarios.
                 Pressable({
                     onPress: (_p: Player) => {
                         const playerName = _p.name.get();

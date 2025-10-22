@@ -11,32 +11,24 @@ import {
 import { addDefaultPacks, maskToPackList } from './PackIdBitmask';
 
 /**
- * InventorySystem presents a simple UI listing the unlocked MBC25 packs
- * for the current player and allows them to activate one or relinquish
- * control of the currently active machine.  It relies on the
- * {@link MBCManager} to handle locking and activation logic.  A
- * managerEntity prop should be set to reference the entity running
- * MBCManager.  This component is implemented using the Pressable
- * element for interactive rows.
+ * Lists the viewer's unlocked MBC25 packs and forwards spawn or relinquish requests to MBCManager.
+ * Requires the managerEntity prop to point at the entity running MBCManager.
  */
 class InventorySystemUI extends UIComponent<typeof InventorySystemUI> {
-    /** Height of the panel in pixels. */
+    /** Panel height in pixels. */
     protected panelHeight: number = 300;
-    /** Width of the panel in pixels. */
+    /** Panel width in pixels. */
     protected panelWidth: number = 500;
 
     /**
-     * Expose a managerEntity property so that the UI can dispatch events
-     * to the MBCManager.  The type is loosely typed as any because
-     * Horizon's UI props system doesn't support strict Entity types in
-     * TypeScript.  In practice this should be set in the editor to
-     * reference the entity containing MBCManager.
+     * Horizon UI props do not support strict entity typing, so the manager reference stays loose.
+     * In practice the editor wires this to the entity running MBCManager.
      */
     static propsDefinition = {
         managerEntity: { type: hz.PropTypes.Entity },
     };
 
-    /** Binding containing the list of unlocked packs. */
+    /** Binding that drives the list of unlocked packs. */
     private packData = new Binding<Array<{ packId: string }>>([]);
 
     /** Message shown when no packs are unlocked. */
@@ -51,19 +43,19 @@ class InventorySystemUI extends UIComponent<typeof InventorySystemUI> {
     /** Disables relinquish button when the viewer does not own the active machine. */
     private relinquishDisabled = new Binding<boolean>(true);
 
-    /** Tracks the name of the current active MBC25 controller, if any. */
+    /** Name of the current active MBC25 controller, if any. */
     private activeControllerName: string | null = null;
 
-    /** Tracks which player this UI panel is currently rendering for. */
+    /** Name of the player currently reflected in the panel state. */
     private currentViewerName: string | null = null;
 
-    /** Binding used to display the current owner of the inventory panel. */
+    /** Binding that communicates who the inventory panel belongs to. */
     private ownerText = new Binding<string>(`The Inventory:`);
 
-    /** Tracks which MBC25 is currently spawned in world */
+    /** PackId for the machine the panel thinks is active. */
     private activeMBC25: string | null = null;
 
-    /** Return the first connected player as the current UI owner. */
+    /** Returns the first connected player when no explicit viewer is tracked. */
     private getCurrentPlayer(): Player | null {
         const players = this.world.getPlayers();
         return players.length > 0 ? players[0] : null;
@@ -137,7 +129,7 @@ class InventorySystemUI extends UIComponent<typeof InventorySystemUI> {
     }
 
     override preStart() {
-        // Update UI whenever the player's inventory changes (e.g. after purchases).
+        // Refresh the viewer's panel when their inventory changes.
         this.connectLocalBroadcastEvent(
             inventoryUpdated,
             ({ playerName }) => {
@@ -148,16 +140,16 @@ class InventorySystemUI extends UIComponent<typeof InventorySystemUI> {
             }
         );
 
-        // Update balance when the manager notifies of changes.
+        // Keep the list current when the soundwave balance shifts.
         this.connectLocalBroadcastEvent(
             soundwaveBalanceChanged,
             (payload: { playerName: string; balance: number }) => {
-                // Rebuild the inventory list in case a pack was bought.
+                // Trigger a rebuild in case the player just purchased a pack.
                 this.refreshInventory(payload.playerName);
             }
         );
 
-        // Track which player currently controls the MBC25 so the UI can gate spawning.
+        // Track the active performer so we can disable conflicting spawn actions.
         this.connectLocalBroadcastEvent(
             activePerformerChanged,
             ({ playerName }) => {
@@ -170,12 +162,7 @@ class InventorySystemUI extends UIComponent<typeof InventorySystemUI> {
     }
 
     /**
-     * Build the UI panel for the inventory.  Each unlocked pack is
-     * displayed as a Pressable row containing a text label.  When a
-     * pack row is pressed, the UI sends a requestMBCActivation event
-     * to the managerEntity with the player's name and the pack ID.
-     * Additionally, a row allows the player to relinquish control of
-     * the active machine by sending a relinquishMBC event.
+     * Constructs the inventory panel layout and wires UI interactions to the relevant events.
      */
     initializeUI(): UINode {
         return View({
@@ -300,6 +287,5 @@ class InventorySystemUI extends UIComponent<typeof InventorySystemUI> {
     }
 }
 
-// Register the UI component so it can be attached to a UI Gizmo.
+// Make the component available for use in the editor.
 UIComponent.register(InventorySystemUI);
-

@@ -1,83 +1,63 @@
 import { LocalEvent, NetworkEvent, Player } from 'horizon/core';
 
 /**
- * Event raised to request a specific MBC25 machine to become active
- * (for example, when swapping between variants).  Listeners can
- * respond by dropping the corresponding machine.  Contains the
- * identifier of the pack to activate.
+ * Fires when a system asks for a specific MBC25 machine to become the visible variant.
+ * Listeners compare the provided packId and drop or hide themselves as needed.
  */
 export const changeActiveMBC = new LocalEvent<{ packId: string }>(
     'changeActiveMachine'
 );
 
 /**
- * Event sent from unlock triggers to the inventory manager.  Carries
- * the player's name and the identifier of the pack that was just
- * unlocked.  The inventory manager will update persistent storage and
- * broadcast a drop event so the machine appears immediately.
+ * Carries a freshly unlocked packId from a trigger to the inventory manager.
+ * The manager persists the unlock, then broadcasts drop events so the machine appears.
  */
 export const unlockMBC25 = new LocalEvent<{ playerName: string; packId: string }>(
     'playerUnlocksNewMBC25'
 );
 
 /**
- * Event used by trigger zones to ask the inventory system which
- * machines a player currently owns.  The inventory manager will
- * respond by printing the inventory (for debugging) and broadcasting
- * drop events for each owned pack.
+ * Requests a dump of the caller's unlocked machines.
+ * The inventory manager responds with console logs and drop events per owned pack.
  */
 export const checkMBCInventory = new LocalEvent<{ playerId: Player }>(
     'checkPlayersInventoryOfMBCs'
 );
 
 /**
- * Event broadcast by the inventory manager to tell all MBC machines to
- * drop if they correspond to the given pack ID.  Each MBCDrop
- * component listens for this event and triggers its drop animation
- * when the pack ID matches its own configured `packId` property.
+ * Broadcast instructing any MBC machine with a matching packId to spawn in.
+ * MBCDrop components listen for this to animate their machines onto the stage.
  */
 export const dropMBC = new LocalEvent<{ packId: string }>(
     'drop correct MBC based on specification'
 );
 
 /**
- * Broadcast whenever a player's unlocked sound pack inventory changes so UIs
- * can refresh their displays or update available options.
+ * Notifies UI layers that a player's unlocked pack set changed and they should refresh.
  */
 export const inventoryUpdated = new LocalEvent<{ playerName: string }>(
     'soundPackInventoryUpdated'
 );
 
 /**
- * Event raised by the UI or other gameplay systems to request that a
- * specific MBC25 machine become the sole active beat machine.  The
- * {@link MBCManager} listens for this event to coordinate which
- * machine is currently in use.  The payload includes the pack
- * identifier to activate and the name of the player making the
- * request.  If a machine is already active for another player, the
- * request may be ignored.
+ * Sent when a player wants to claim the active MBC25 machine for a specific pack.
+ * MBCManager arbitrates competing requests using this event.
  */
 export const requestMBCActivation = new LocalEvent<{ playerName: string; packId: string }>(
     'requestMBC25Activation'
 );
 
 /**
- * Event raised when a player relinquishes control of the active
- * MBC25 beat machine.  When this event is received, the
- * {@link MBCManager} will clear its internal lock and despawn any
- * currently active machine so that another player may claim a new
- * one.  The payload simply carries the name of the player giving up
- * control; if the player does not currently control the machine the
- * event has no effect.
+ * Indicates that the named player is done performing so the active machine can unlock.
+ * MBCManager clears its lock and hides the machine when this fires.
  */
 export const relinquishMBC = new LocalEvent<{ playerName: string }>(
     'relinquishActiveMBC25'
 );
 
 /**
- * Broadcast whenever the player controlling the active machine changes.
- * Payload contains the new performer's name or null if no one owns the
- * machine.  This allows other systems to react to performer swaps.
+ * Broadcast whenever performer ownership changes.
+ * Payload includes the performer name or null so other systems can react.
  */
 export const activePerformerChanged = new LocalEvent<{ playerName: string | null }>(
     'activePerformerChanged'
@@ -85,10 +65,8 @@ export const activePerformerChanged = new LocalEvent<{ playerName: string | null
 
 
 /**
- * Broadcast whenever the player controlling the UI system changes.
- * Payload contains the new owner's name or null if no one owns the
- * stroe ui.  This allows the store ui to display information for 
- * whichever player clicks refresh last.
+ * Broadcast whenever the store UI should consider a different player as its owner.
+ * Payload carries the shopper's name or null so the panel knows whose data to show.
  */
 export const uiOwnerChanged = new LocalEvent<{ playerName: string | null }>(
     'activeShopperChanged'
@@ -96,8 +74,8 @@ export const uiOwnerChanged = new LocalEvent<{ playerName: string | null }>(
 
 
 /**
- * Event raised when a player attempts to purchase a sound pack using
- * soundwave points via the store UI.
+ * Fired when the store UI submits a soundwave purchase for a pack.
+ * Payload contains the buyer name, packId, and cost.
  */
 export const purchasePackWithSoundwaves = new LocalEvent<{
     playerName: string;
@@ -108,8 +86,7 @@ export const purchasePackWithSoundwaves = new LocalEvent<{
 );
 
 /**
- * Fired whenever a player's soundwave balance is updated so UI elements
- * can refresh their displays.
+ * Broadcast whenever a player's soundwave balance changes so HUDs can update.
  */
 export const soundwaveBalanceChanged = new LocalEvent<{
     playerName: string;
@@ -119,24 +96,20 @@ export const soundwaveBalanceChanged = new LocalEvent<{
 );
 
 /**
- * Request to open the soundwave store UI for a specific player.
+ * Requests that the store UI become visible for the provided player reference.
  */
 export const openSoundwaveStore = new LocalEvent<{ player: Player }>(
     'openSoundwaveStoreUI'
 );
 
-///**
-// * Request to close the soundwave store UI for a specific player.
-// */
-//export const closeSoundwaveStore = new LocalEvent<{ player: Player }>(
-//    'closeSoundwaveStoreUI'
-//);
+// Request definition retained for potential close-store support.
+// export const closeSoundwaveStore = new LocalEvent<{ player: Player }>(
+//     'closeSoundwaveStoreUI'
+// );
 
 /**
- * Broadcast when the MBC25 machine starts or stops playing loops so
- * other systems can react to audible music state.
+ * Broadcast when the MBC25 starts or stops playback so dependent systems can react.
  */
 export const machinePlayState = new LocalEvent<{ isPlaying: boolean }>(
     'mbc25MachinePlayState'
 );
-

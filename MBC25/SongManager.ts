@@ -91,9 +91,9 @@ class SongManager extends hz.Component<typeof SongManager> {
     private startLoopScheduler() {
         if (this.intervalId !== null) return;
 
-        const interval = this.loopDurationSec * 1000; // ms
+        const interval = this.loopDurationSec * 1000; // milliseconds
         this.intervalId = this.async.setInterval(() => {
-            // Reset all buttons to their offline state first
+            // Reset every button to idle before replaying active loops.
             this.channelLoops.forEach((loops, channelIdx) => {
                 loops.forEach((gizmo, loopIdx) => {
                     this.sendLocalBroadcastEvent(hardOfflineColorChangeEvent, {
@@ -103,7 +103,7 @@ class SongManager extends hz.Component<typeof SongManager> {
                 });
             });
 
-            // Then bring the active loops online and replay them
+            // Bring active loops back online and restart playback.
             Object.values(this.activeLoops).forEach(({ channelId, loopSectionId, gizmo }) => {
                 this.sendLocalBroadcastEvent(playingColorChangeEvent, {
                     channel: channelId,
@@ -124,7 +124,7 @@ class SongManager extends hz.Component<typeof SongManager> {
     }
 
     preStart() {
-        // Map all audio gizmos to their grid positions
+        // Map audio gizmos to their grid slots.
         this.channelLoops = [
             [this.props.chan1Loop1!.as(hz.AudioGizmo), this.props.chan1Loop2!.as(hz.AudioGizmo), this.props.chan1Loop3!.as(hz.AudioGizmo), this.props.chan1Loop4!.as(hz.AudioGizmo), this.props.chan1Loop5!.as(hz.AudioGizmo)],
             [this.props.chan2Loop1!.as(hz.AudioGizmo), this.props.chan2Loop2!.as(hz.AudioGizmo), this.props.chan2Loop3!.as(hz.AudioGizmo), this.props.chan2Loop4!.as(hz.AudioGizmo), this.props.chan2Loop5!.as(hz.AudioGizmo)],
@@ -138,7 +138,7 @@ class SongManager extends hz.Component<typeof SongManager> {
         this.beatsPerLoop = this.props.beatsPerLoop!;
         this.loopDurationSec = (60.0 / this.songBPM) * this.beatsPerLoop;
 
-        // React to loop trigger events
+        // React to loop trigger events.
         this.connectLocalBroadcastEvent(loopTriggerEvent, (loopData) => {
             console.log(`Channel: ${loopData.channelId}, Loop: ${loopData.loopSectionId} triggered to start.`);
             const incomingChannelId = loopData.channelId;
@@ -148,7 +148,7 @@ class SongManager extends hz.Component<typeof SongManager> {
 
             if (oldLoop !== undefined) {
                 if (oldLoop.loopSectionId === incomingLoopId) {
-                    return; // already playing this loop
+                    return; // Already playing this loop; nothing to change.
                 }
                 this.sendLocalBroadcastEvent(offlineColorChangeEvent, {
                     channel: loopData.channelId,
@@ -165,7 +165,7 @@ class SongManager extends hz.Component<typeof SongManager> {
             };
 
             if (wasEmpty) {
-                // First loop starts immediately
+                // First loop plays immediately.
                 this.startLoopScheduler();
                 this.sendLocalBroadcastEvent(playingColorChangeEvent, {
                     channel: loopData.channelId,
@@ -174,7 +174,7 @@ class SongManager extends hz.Component<typeof SongManager> {
                 newAudio.play();
                 this.updatePlayState();
             } else {
-                // Subsequent loops queue for next bar
+                // Additional loops queue for the next bar.
                 this.sendLocalBroadcastEvent(upcomingLoopColorChangedEvent, {
                     channel: loopData.channelId,
                     loopId: loopData.loopSectionId,
@@ -182,15 +182,16 @@ class SongManager extends hz.Component<typeof SongManager> {
             }
         });
 
-        // Listen for channel stop requests
+        // Handle channel stop requests.
         this.connectLocalBroadcastEvent(stopRowEvent, (channelData) => {
             this.stopChannel(channelData.channelId);
         });
     }
 
     start() {
-        // Interval scheduler begins on first loop press, nothing needed here.
+        // Scheduler starts after the first trigger; no setup required here.
     }
 }
 
 hz.Component.register(SongManager);
+

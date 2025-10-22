@@ -6,7 +6,7 @@ type ComponentProps = {
     leaderboardName?: string | null;
 };
 
-/** Mirrors the SoundwaveManager persistent variable to a world leaderboard. */
+/** Syncs the persistent soundwave balance to a world leaderboard entry. */
 class SoundwaveLeaderboard extends hz.Component<typeof SoundwaveLeaderboard> {
     static propsDefinition = {
         leaderboardName: {
@@ -18,7 +18,7 @@ class SoundwaveLeaderboard extends hz.Component<typeof SoundwaveLeaderboard> {
     private readonly SOUNDWAVE_PPV = 'SoundwaveManager:points';
 
     override preStart(): void {
-        // Keep the leaderboard synced when balances change.
+        // Push balance updates to the leaderboard as soon as they broadcast.
         this.connectLocalBroadcastEvent(
             soundwaveBalanceChanged,
             ({ playerName, balance }: { playerName: string; balance: number }) => {
@@ -35,7 +35,7 @@ class SoundwaveLeaderboard extends hz.Component<typeof SoundwaveLeaderboard> {
             }
         );
 
-        // Populate scores for players who join (e.g. reconnect, new entrants).
+        // Initialize scores for players as they enter the world.
         const hostEntity = this.entity;
         if (hostEntity) {
             this.connectCodeBlockEvent(
@@ -47,7 +47,7 @@ class SoundwaveLeaderboard extends hz.Component<typeof SoundwaveLeaderboard> {
     }
 
     override start(): void {
-        // Align the leaderboard with any players already present when the script starts.
+        // Align scores for any players who were already present when the script booted.
         for (const player of this.world.getPlayers()) {
             this.syncPlayerScore(player);
         }

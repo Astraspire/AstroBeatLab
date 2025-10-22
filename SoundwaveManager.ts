@@ -8,15 +8,12 @@ import {
     unlockMBC25,
 } from './shared-events-MBC25';
 import {
-    NotificationEvent 
+    NotificationEvent
 } from './UI_SimpleButtonEvent';
 
 /**
- * SoundwaveManager tracks and awards "soundwave" points to players based on
- * their activity with the MBC25 beat machine. Points accumulate once per
- * minute while a machine is playing and the player is not AFK. The active
- * performer receives an additional point per listening player. Points can be
- * spent to unlock additional sound packs.
+ * Awards, stores, and spends soundwave points based on MBC25 activity.
+ * Ticks once per minute while the machine plays, tracks AFK status, and forwards purchase requests.
  */
 export default class SoundwaveManager extends hz.Component<typeof SoundwaveManager> {
     static propsDefinition = {
@@ -27,10 +24,15 @@ export default class SoundwaveManager extends hz.Component<typeof SoundwaveManag
     /** Persistent storage key for a player's soundwave balance. */
     private readonly SOUNDWAVE_PPV = 'SoundwaveManager:points';
 
-    private machinePlaying: boolean = false; // whether any loops are active
-    private currentPerformer: string | null = null; // name of the active performer
-    private afkPlayers: Set<string> = new Set(); // players currently AFK
-    private listenerToastShown: Set<string> = new Set(); // to avoid duplicate toasts
+    /** Flag indicating whether any loops are currently playing. */
+    private machinePlaying: boolean = false;
+    /** Name of the performer eligible for bonus points. */
+    private currentPerformer: string | null = null;
+    /** Players currently marked as AFK and ineligible for awards. */
+    private afkPlayers: Set<string> = new Set();
+    /** Tracks listeners who already saw the "earning points" toast. */
+    private listenerToastShown: Set<string> = new Set();
+    /** Tracks performers who already saw the amplified points toast. */
     private performerToastShown: Set<string> = new Set();
     private notificationManager: hz.Entity | null = null;
 
@@ -61,7 +63,7 @@ export default class SoundwaveManager extends hz.Component<typeof SoundwaveManag
         player: Player,
         opts: { text: string; position: { horizontal: 'left' | 'right'; vertical: 'top' | 'bottom' } }
     ): void {
-        // Horizon currently lacks a built-in toast API, so log to console.
+        // Horizon does not expose a toast API, so log until UI notifications are wired.
         console.log(`[Notification to ${player.name.get()}] ${opts.text}`);
     }
 
@@ -91,7 +93,7 @@ export default class SoundwaveManager extends hz.Component<typeof SoundwaveManag
 
     /** Show a one-time toast to listeners when they start earning points. */
     private showListenerToast(player: Player): void {
-        // Hypothetical API for displaying a toast in the top-left corner.
+        // Reuse the logging helper to mimic a toast for the listener.
         this.showNotification(player, {
             text: 'Earning soundwaves!',
             position: { horizontal: 'left', vertical: 'top' },
@@ -108,8 +110,7 @@ export default class SoundwaveManager extends hz.Component<typeof SoundwaveManag
 
     /** Award points every minute to active players. */
     private awardPoints = () => {
-        // Log each tick so we can verify the cadence of the award cycle and
-        // whether the machine is considered "playing".
+        // Log tick cadence for debugging and ensure the machine is flagged as playing.
         console.log(
             `[Soundwave] awardPoints tick - machinePlaying=${this.machinePlaying}`
         );
@@ -120,11 +121,11 @@ export default class SoundwaveManager extends hz.Component<typeof SoundwaveManag
             `[Soundwave] active listeners this tick: ${active.length} / ${players.length}`
         );
 
-        // Everyone listening earns one point per minute.
+        // Give every active listener one point per minute.
         for (const p of active) {
             const newBal = this.getBalance(p) + 1;
             this.setBalance(p, newBal);
-            // Log and notify each increment so we can verify accumulation.
+            // Surface the increment so designers can validate the accrual rate.
             console.log(`[Soundwave] ${p.name.get()} earned 1 point (total: ${newBal}).`);
             this.showNotification(p, {
                 text: `+1 soundwave (total ${newBal})`,
@@ -136,11 +137,11 @@ export default class SoundwaveManager extends hz.Component<typeof SoundwaveManag
             }
         }
 
-        // Performer gets a boost for each listener.
+        // Grant performers a bonus equal to the number of listeners.
         if (this.currentPerformer) {
             const performer = active.find(p => p.name.get() === this.currentPerformer);
             if (performer) {
-                const listeners = active.length - 1; // exclude performer
+                const listeners = active.length - 1; // Remove performer from the count.
                 if (listeners > 0) {
                     const newBal = this.getBalance(performer) + listeners;
                     this.setBalance(performer, newBal);
@@ -158,8 +159,7 @@ export default class SoundwaveManager extends hz.Component<typeof SoundwaveManag
         }
     };
 
-    /** Handle purchase requests from the store UI. */
-    /** Attempt to purchase a pack with soundwave points for the given player. */
+    /** Processes a store purchase using the player's soundwave balance. */
     private handlePurchase = ({ playerName, packId, cost }: { playerName: string; packId: string; cost: number; }) => {
         const player = this.world
             .getPlayers()
@@ -171,7 +171,7 @@ export default class SoundwaveManager extends hz.Component<typeof SoundwaveManag
             return;
         }
         this.setBalance(player, balance - cost);
-        // Unlock the purchased pack for the player.
+        // Forward the purchase so the inventory system unlocks the pack.
         this.sendLocalEvent(this.props.InventoryManager!, unlockMBC25, { playerName, packId });
     };
 
@@ -196,7 +196,7 @@ export default class SoundwaveManager extends hz.Component<typeof SoundwaveManag
             );
         }
 
-        // Track AFK status so inactive players don't earn points.
+        // Track AFK status so inactive players never earn points.
         this.connectCodeBlockEvent(
             this.entity!,
             hz.CodeBlockEvents.OnPlayerEnterAFK,
@@ -208,7 +208,7 @@ export default class SoundwaveManager extends hz.Component<typeof SoundwaveManag
             (p: Player) => this.afkPlayers.delete(p.name.get())
         );
 
-        // Listen for machine play state and log changes.
+        // Mirror machine play state so awards only tick while music plays.
         this.connectLocalBroadcastEvent(machinePlayState, ({ isPlaying }) => {
             const wasPlaying = this.machinePlaying;
             this.machinePlaying = isPlaying;
@@ -226,24 +226,24 @@ export default class SoundwaveManager extends hz.Component<typeof SoundwaveManag
             console.log(`MBC25 machine is now ${isPlaying ? 'playing' : 'stopped'}.`);
         });
 
-        // Keep track of which player is performing for bonus points.
+        // Remember who is performing to apply the bonus multiplier.
         this.connectLocalBroadcastEvent(activePerformerChanged, ({ playerName }) => {
             this.currentPerformer = playerName;
         });
 
-        // Handle purchase requests coming from the store UI.
+        // Accept purchase requests from the store UI.
         this.connectLocalEvent(
             this.entity!,
             purchasePackWithSoundwaves,
             this.handlePurchase
         );
 
-        // Award points every minute based on current activity.
+        // Schedule the minute-by-minute point grants.
         this.async.setInterval(this.awardPoints, 60_000);
     }
 
     override start() {
-        // nothing required
+        // No additional startup work required.
     }
 }
 

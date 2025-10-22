@@ -19,7 +19,7 @@ class StopButtonTrigger extends hz.Component<typeof StopButtonTrigger> {
     }
 
     preStart() {
-        // Send stop event when a player leaves the trigger
+        // Broadcast a stop when the player steps off.
         this.connectCodeBlockEvent(
             this.entity,
             hz.CodeBlockEvents.OnPlayerExitTrigger,
@@ -28,8 +28,9 @@ class StopButtonTrigger extends hz.Component<typeof StopButtonTrigger> {
     }
 
     start() {
-        // No runtime logic required.
+        // Nothing extra to initialize at start.
     }
 }
 
 hz.Component.register(StopButtonTrigger);
+

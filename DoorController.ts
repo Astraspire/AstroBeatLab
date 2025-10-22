@@ -1,6 +1,6 @@
 import { Component, PropTypes, Vec3, World, NetworkEvent, Player } from 'horizon/core';
 
-// Define network events for players entering and exiting the trigger zone.
+// Network events dispatched when players enter or exit the trigger.
 const PlayerEnteredEvent = new NetworkEvent<{ player: Player }>('playerEntered');
 const PlayerExitedEvent = new NetworkEvent<{ player: Player }>('playerExited');
 
@@ -19,16 +19,16 @@ export class DoorController extends Component<typeof DoorController> {
   override preStart() {
     if (!this.props.door) return;
 
-    // Listen for network events to open or close the door
+    // Respond to trigger events by opening or closing the door.
     this.connectNetworkEvent(this.entity, PlayerEnteredEvent, (data) => this.onPlayerEntered(data.player));
     this.connectNetworkEvent(this.entity, PlayerExitedEvent, (data) => this.onPlayerExited(data.player));
 
-    // Connect to the world update loop for smooth animation
+    // Animate the door every frame via the world update loop.
     this.connectLocalBroadcastEvent(World.onUpdate, (data) => this.updateDoorPosition(data.deltaTime));
   }
 
   override start() {
-    // Set the door to its initial closed position
+    // Initialize the door at the closed position.
     if (this.props.door) {
       this.props.door.position.set(this.props.closedPosition);
       this.targetPosition = this.props.closedPosition;
@@ -43,12 +43,12 @@ export class DoorController extends Component<typeof DoorController> {
   private onPlayerExited(player: Player) {
     this.playersInTrigger.delete(player.id);
 
-    // Wait before checking if the door should close
+    // Delay closing to let nearby players slip through.
     this.async.setTimeout(() => {
       if (this.playersInTrigger.size === 0) {
         this.closeDoor();
       }
-    }, 8000); // 8-second delay
+    }, 8000); // Wait eight seconds before closing.
   }
 
   private openDoor() {
@@ -74,14 +74,14 @@ export class DoorController extends Component<typeof DoorController> {
     const currentPosition = door.position.get();
     const distance = currentPosition.distance(this.targetPosition);
 
-    // Stop moving if we are very close to the target
+    // Snap to the target when the door is nearly aligned.
     if (distance < 0.01) {
       this.isMoving = false;
       door.position.set(this.targetPosition);
       return;
     }
 
-    // Move the door towards the target position using linear interpolation (Lerp)
+    // Lerp toward the target to keep motion smooth.
     const newPosition = Vec3.lerp(currentPosition, this.targetPosition, this.props.speed * deltaTime);
     door.position.set(newPosition);
   }
