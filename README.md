@@ -13,7 +13,7 @@ Astro Beat Lab is a Horizon Worlds project that turns the MBC25 music machine in
 - `SoundwaveLeaderboard.ts` – writes soundwave balances to a world leaderboard.
 - `PackIdBitmask.ts` / `SoundPackTypes.ts` – utilities describing pack identifiers and their bitmask encoding.
 - `MBC25/` – loop playback system shared by all packs (`SongManager.ts`, trigger scripts, and loop-specific events).
-- Utility scripts (`CycleLightColor.ts`, `SpinBowl.ts`, `TriggerDetector.ts`, etc.) add ambient motion or helper logic.
+- Utility scripts (`CycleLightColor.ts`, `TriggerDetector.ts`, etc.) add ambient motion or helper logic.
 
 ## Machine Activation & Inventory Flow
 
