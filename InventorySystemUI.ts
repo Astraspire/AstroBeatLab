@@ -8,6 +8,9 @@ import {
     soundwaveBalanceChanged,
     activePerformerChanged,
 } from './shared-events-MBC25';
+import {
+    NotificationEvent
+} from './UI_SimpleButtonEvent';
 import { addDefaultPacks, maskToPackList } from './PackIdBitmask';
 
 /**
@@ -26,6 +29,7 @@ class InventorySystemUI extends UIComponent<typeof InventorySystemUI> {
      */
     static propsDefinition = {
         managerEntity: { type: hz.PropTypes.Entity },
+        notificationManager: { type: hz.PropTypes.Entity, default: null },
     };
 
     /** Binding that drives the list of unlocked packs. */
@@ -128,6 +132,30 @@ class InventorySystemUI extends UIComponent<typeof InventorySystemUI> {
         return maskToPackList(mask);
     }
 
+    /**
+     * Trigger the UI notification pop-up for the given recipients. When no recipients are provided the
+     * message is shown to everyone in the world. Falls back to logging when the manager is not available.
+     */
+    private triggerUiNotification(message: string, recipients?: Player[]): void {
+        const targets =
+            recipients && recipients.length > 0 ? recipients : this.world.getPlayers();
+        for (const target of targets) {
+            console.log(`[Notification to ${target.name.get()}] ${message}`);
+        }
+
+        const payload = {
+            message,
+            players: targets,
+            imageAssetId: null as string | null,
+        };
+
+        if (this.props.notificationManager) {
+            this.sendLocalEvent(this.props.notificationManager, NotificationEvent, payload);
+        }
+
+        this.sendLocalBroadcastEvent(NotificationEvent, payload);
+    }
+
     override preStart() {
         // Refresh the viewer's panel when their inventory changes.
         this.connectLocalBroadcastEvent(
@@ -212,6 +240,10 @@ class InventorySystemUI extends UIComponent<typeof InventorySystemUI> {
                                     this.activeMBC25 = packId;
                                 }
                                 this.updateLockBindings();
+
+                                if (this.props.notificationManager) {
+                                    this.triggerUiNotification(`${playerName}'s ${packId} is loaded on the stage now!`)
+                                }
                             },
                             style: {
                                 marginBottom: 8,
