@@ -5,7 +5,8 @@ import {
     relinquishMBC,
     dropMBC,
     activePerformerChanged,
-    machinePlayState
+    machinePlayState,
+    askToRelinquishMBC
 } from './shared-events-MBC25';
 import { PACK_ID_BITS } from './PackIdBitmask';
 import { simpleButtonEvent } from "UI_SimpleButtonEvent";
@@ -81,10 +82,16 @@ class MBCManager extends hz.Component<typeof MBCManager> {
         this.afkTimeouts.set(playerName, timeoutId);
     }
 
+    private isPlayerInWorld(player: hz.Player) {
+        return this.world.getPlayers().includes(player) &&
+            !player.isInBuildMode.get()
+    }
+
     private cancelAfkCountdown(player: hz.Player): void {
         const playerName = player.name.get();
         this.clearAfkTimeout(playerName);
     }
+
     preStart() {
         // Accept activation requests from UI and script callers.
         this.connectLocalEvent(
@@ -134,6 +141,20 @@ class MBCManager extends hz.Component<typeof MBCManager> {
                 }
             }
         );
+
+        this.connectLocalEvent(
+            this.entity!,
+            askToRelinquishMBC,
+            ({ playerName }) => {
+                const player = this.world.getPlayers().find(p => p.name.get() === playerName);
+
+                if (this.isPlayerInWorld( player! )) {
+                    return;
+                } else {
+                    this.forfeitControlCountdown(player!);
+                }
+            }
+        )
 
         this.connectCodeBlockEvent(
             this.entity!,

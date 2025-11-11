@@ -56,6 +56,14 @@ export const relinquishMBC = new LocalEvent<{ playerName: string }>(
 );
 
 /**
+ * Asks if the named player is done performing so the active inventory can unlock.
+ * MBCManager clears its lock and hides the machine when this fires.
+ */
+export const askToRelinquishMBC = new LocalEvent<{ playerName: string }>(
+    'attemptToRelinquishActiveMBC25'
+);
+
+/**
  * Broadcast whenever performer ownership changes.
  * Payload includes the performer name or null so other systems can react.
  */

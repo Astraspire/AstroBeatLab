@@ -7,6 +7,7 @@ import {
     inventoryUpdated,
     soundwaveBalanceChanged,
     activePerformerChanged,
+    askToRelinquishMBC,
 } from './shared-events-MBC25';
 import {
     NotificationEvent
@@ -97,6 +98,11 @@ class InventorySystemUI extends UIComponent<typeof InventorySystemUI> {
             );
             this.spawnButtonsDisabled.set(true);
             this.relinquishDisabled.set(true);
+            this.sendLocalEvent(
+                this.props.managerEntity!,
+                askToRelinquishMBC,
+                { playerName: controller }
+            )
         }
     }
 
@@ -117,6 +123,7 @@ class InventorySystemUI extends UIComponent<typeof InventorySystemUI> {
         }
 
         this.updateLockBindings();
+        this.currentViewerName = playerName;
     }
 
     /** Retrieve unlocked packs from persistent storage as a numeric bitmask. */
@@ -223,10 +230,17 @@ class InventorySystemUI extends UIComponent<typeof InventorySystemUI> {
                     data: this.packData,
                     renderItem: (item) => {
                         const packId = item.packId;
+                        // spawn pack from available inventory button
                         return Pressable({
                             disabled: this.spawnButtonsDisabled,
                             onPress: (_player) => {
                                 const playerName = _player?.name.get() ?? '';
+                                if (playerName != this.currentViewerName) {
+                                    if (this.props.notificationManager) {
+                                        this.triggerUiNotification(`Someone else's inventory is still open, try refreshing!`)
+                                    }
+                                    return;
+                                }
                                 this.currentViewerName = playerName;
                                 const manager: any = (this.props as any).managerEntity;
                                 if (manager) {
