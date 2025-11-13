@@ -11,7 +11,7 @@ import { Quaternion } from 'horizon/core';
 /** String literal union matching the configured asset props. */
 type MachineKey = 'MBC25-LUCKY' | 'MBC25-SOMETA' | 'MBC25-PHONK-E-CHEESE';
 
-class MBCDrop extends hz.Component<typeof MBCDrop> {
+export class MBCDrop extends hz.Component<typeof MBCDrop> {
     static propsDefinition = {
         /** Asset bundle for the Lucky machine variant. */
         luckyMBC25: { type: hz.PropTypes.Asset },
@@ -23,13 +23,14 @@ class MBCDrop extends hz.Component<typeof MBCDrop> {
         stagePos: { type: hz.PropTypes.Vec3, default: new hz.Vec3(0, 0, 0) },
         stageRot: { type: hz.PropTypes.Quaternion, default: Quaternion.one },
         stageScale: { type: hz.PropTypes.Vec3, default: hz.Vec3.one },
+
     };
 
     /** Cached world position used when spawning machines. */
     private initialLocal!: hz.Vec3;
     /** Optional handle for tween update subscriptions. */
     private updateSub!: hz.EventSubscription;
-
+    private spawnedRoots: hz.Entity[] = [] // stores a list of all previously mbc's spawned into world
     private currentRoot?: hz.Entity; // Root entity for the spawned machine.
     private currentKey?: string; // Tracks which pack is currently live.
     private switching: boolean = false; // Prevents overlapping spawn operations.
@@ -43,8 +44,14 @@ class MBCDrop extends hz.Component<typeof MBCDrop> {
         this.switching = true;
         this.currentKey = key;
 
+        // removes all previously spawned MBCs
         if (this.currentRoot?.exists()) {
-            await this.world.deleteAsset(this.currentRoot);
+            await Promise.all(
+                this.spawnedRoots
+                    .filter(root => root?.exists())
+                    .map(root => this.world.deleteAsset(root))
+            );
+            this.spawnedRoots.length = 0;
         }
 
         const asset = this.assetFromKey(key as MachineKey);
@@ -53,7 +60,8 @@ class MBCDrop extends hz.Component<typeof MBCDrop> {
             this.switching = false;
             return;
         }
-
+        
+        // spawns new MBC
         const [root] = await this.world.spawnAsset(
             asset,
             this.props.stagePos,
@@ -61,7 +69,8 @@ class MBCDrop extends hz.Component<typeof MBCDrop> {
             this.props.stageScale,
         );
 
-        this.currentRoot = root;
+        this.spawnedRoots.push(root); // adds root to list of spawned MBCs
+        this.currentRoot = root; // sets current MBC
         this.switching = false;
     }
 

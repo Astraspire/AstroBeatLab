@@ -51,7 +51,7 @@ export const requestMBCActivation = new LocalEvent<{ playerName: string; packId:
  * Indicates that the named player is done performing so the active machine can unlock.
  * MBCManager clears its lock and hides the machine when this fires.
  */
-export const relinquishMBC = new LocalEvent<{ playerName: string }>(
+export const relinquishMBC = new LocalEvent<{ playerName: string | null}>(
     'relinquishActiveMBC25'
 );
 

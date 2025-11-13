@@ -94,7 +94,7 @@ class InventorySystemUI extends UIComponent<typeof InventorySystemUI> {
             this.relinquishDisabled.set(false);
         } else {
             this.lockMessage.set(
-                `${controller} is using their MBC25. Wait for them to put it away or be AFK for 90 seconds.`
+                `${controller} is using their MBC25. Wait for them to put it away or go AFK for 60 seconds.`
             );
             this.spawnButtonsDisabled.set(true);
             this.relinquishDisabled.set(true);
@@ -237,27 +237,31 @@ class InventorySystemUI extends UIComponent<typeof InventorySystemUI> {
                                 const playerName = _player?.name.get() ?? '';
                                 if (playerName != this.currentViewerName) {
                                     if (this.props.notificationManager) {
-                                        this.triggerUiNotification(`Someone else's inventory is still open, try refreshing!`)
-                                    }
+                                        this.triggerUiNotification(
+                                            `Someone else's inventory is still open, try refreshing!`,
+                                            [_player]
+                                            )
+                                    };
                                     return;
                                 }
                                 this.currentViewerName = playerName;
                                 const manager: any = (this.props as any).managerEntity;
-                                if (manager) {
+                                if ((manager) && ((this.activeControllerName == this.currentViewerName) || this.activeControllerName == null)) {
                                     this.sendLocalEvent(
                                         manager,
                                         requestMBCActivation,
                                         { playerName, packId }
                                     );
+                                    if (this.props.notificationManager) {
+                                        this.triggerUiNotification(`${playerName}'s ${packId} is loaded on the stage now!`);
+                                    }
                                 }
+
                                 if (packId != null) {
                                     this.activeMBC25 = packId;
                                 }
                                 this.updateLockBindings();
-
-                                if (this.props.notificationManager) {
-                                    this.triggerUiNotification(`${playerName}'s ${packId} is loaded on the stage now!`)
-                                }
+                                
                             },
                             style: {
                                 marginBottom: 8,
@@ -276,18 +280,32 @@ class InventorySystemUI extends UIComponent<typeof InventorySystemUI> {
                     style: { flexGrow: 1 },
                 }),
                 Pressable({
+                    // 'Put away your MBC' button
                     disabled: this.relinquishDisabled,
                     onPress: (_player) => {
                         const playerName = _player?.name.get() ?? '';
-                        this.currentViewerName = playerName;
                         this.updateLockBindings();
                         const manager: any = (this.props as any).managerEntity;
-                        if (manager) {
+                        if (playerName != this.currentViewerName) {
+                           if (this.props.notificationManager) {
+                                this.triggerUiNotification(
+                                    `Your inventory panel is not open, referesh first.`,
+                                    [_player]
+                                    )
+                            }; 
+                        };
+                        if ((manager) && (this.activeControllerName == playerName)) {
                             this.sendLocalEvent(
                                 manager,
                                 relinquishMBC,
                                 { playerName }
                             );
+                            if (this.props.notificationManager) {
+                                this.triggerUiNotification(
+                                    `You have put away your MBC25.`,
+                                    [_player]
+                                    )
+                            };
                         }
                     },
                     style: {

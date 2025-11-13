@@ -57,9 +57,13 @@ class MBCManager extends hz.Component<typeof MBCManager> {
         }
     }
 
-    private forfeitControlCountdown(player: hz.Player): void {
-        const playerName = player.name.get();
-        if (playerName !== this.controllingPlayer) {
+    private forfeitControlCountdown(player: hz.Player | undefined): void {
+        if (!player) {
+           this.sendLocalBroadcastEvent(relinquishMBC, { playerName: null }); 
+        }
+
+        const playerName = player!.name.get();
+        if (playerName !== this.controllingPlayer!){
             return;
         }
 
@@ -68,8 +72,9 @@ class MBCManager extends hz.Component<typeof MBCManager> {
         const timeoutId = this.async.setTimeout(() => {
             if (playerName === this.controllingPlayer) {
                 console.log(
-                    `MBCManager: ${playerName} has been AFK for 90 seconds. Releasing control.`
+                    `MBCManager: ${playerName} has been AFK for 60 seconds. Releasing control.`
                 );
+                this.sendLocalBroadcastEvent(relinquishMBC, { playerName: null });
                 this.activePack = null;
                 this.controllingPlayer = null;
                 this.sendLocalBroadcastEvent(changeActiveMBC, { packId: '' });
@@ -77,7 +82,7 @@ class MBCManager extends hz.Component<typeof MBCManager> {
                 this.sendLocalBroadcastEvent(machinePlayState, { isPlaying: false });
             }
             this.afkTimeouts.delete(playerName);
-        }, 90000);
+        }, 60_000);
 
         this.afkTimeouts.set(playerName, timeoutId);
     }
@@ -128,7 +133,7 @@ class MBCManager extends hz.Component<typeof MBCManager> {
             this.entity!,
             relinquishMBC,
             ({ playerName }) => {
-                if (this.controllingPlayer === playerName) {
+                if ((this.controllingPlayer === playerName) && (playerName != null)) {
                     console.log(
                         `MBCManager: ${playerName} relinquished the MBC25 control.`
                     );
@@ -136,7 +141,7 @@ class MBCManager extends hz.Component<typeof MBCManager> {
                     this.activePack = null;
                     this.controllingPlayer = null;
                     this.sendLocalBroadcastEvent(changeActiveMBC, { packId: '' });
-                    this.sendLocalBroadcastEvent(activePerformerChanged, { playerName: null });
+                    this.sendLocalBroadcastEvent(activePerformerChanged, { playerName: null } );
                     this.sendLocalBroadcastEvent(machinePlayState, { isPlaying: false });
                 }
             }

@@ -127,7 +127,7 @@ export default class MBC25Inventory extends Component<typeof MBC25Inventory> {
                         dropMBC,
                         { packId: requestData.packId }
                     )
-                } else if (this.activePerformer === "") {
+                } else if ((this.activePerformer === "") || (this.activePerformer === undefined)) {
                     // First performer claims the stage and spawns their pack.
                     this.sendLocalBroadcastEvent(
                         dropMBC,
