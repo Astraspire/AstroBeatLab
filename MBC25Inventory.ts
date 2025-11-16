@@ -1,7 +1,7 @@
 import * as hz from "horizon/core";
 import { Component, Player } from "horizon/core";
 import { Inventory } from "./SoundPackTypes";
-import { changeActiveMBC, checkMBCInventory, dropMBC, unlockMBC25, requestMBCActivation, inventoryUpdated } from "./shared-events-MBC25";
+import { checkMBCInventory, dropMBC, unlockMBC25, requestMBCActivation, inventoryUpdated } from "./shared-events-MBC25";
 import { PACK_ID_BITS, addDefaultPacks, maskToPackList } from "./PackIdBitmask";
 
 /**
@@ -16,7 +16,7 @@ export default class MBC25Inventory extends Component<typeof MBC25Inventory> {
     }
 
     /** Current performer controlling an MBC25, recorded by player name. */
-    private activePerformer!: string;
+    private activePerformer: string | null = null;
 
     /**
      * Returns the player's unlocked packs as {@link Inventory} records.
@@ -108,7 +108,7 @@ export default class MBC25Inventory extends Component<typeof MBC25Inventory> {
     /** Clears the active performer slot when the performer exits the world. */
     private resetActivePerformer(player: hz.Player): void {
 
-        if (player.name.get() === this.activePerformer) {
+        if (this.activePerformer === null) {
             this.activePerformer = "";
         }
 
@@ -127,7 +127,7 @@ export default class MBC25Inventory extends Component<typeof MBC25Inventory> {
                         dropMBC,
                         { packId: requestData.packId }
                     )
-                } else if ((this.activePerformer === "") || (this.activePerformer === undefined)) {
+                } else if ((this.activePerformer === "") || (this.activePerformer === null)) {
                     // First performer claims the stage and spawns their pack.
                     this.sendLocalBroadcastEvent(
                         dropMBC,
@@ -135,7 +135,7 @@ export default class MBC25Inventory extends Component<typeof MBC25Inventory> {
                     )
                     // Remember who is currently performing.
                     this.activePerformer = requestData.playerName;
-                    console.log(`${this.activePerformer} is now the active performer.`)
+                    console.log(`${this.activePerformer} is now the active performer.`);
                 } else {
                     console.log(`${requestData.playerName} request to change MBC25 is denied, ${this.activePerformer} is still performing!`)
                 }

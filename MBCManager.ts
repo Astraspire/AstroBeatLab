@@ -6,10 +6,9 @@ import {
     dropMBC,
     activePerformerChanged,
     machinePlayState,
-    askToRelinquishMBC
 } from './shared-events-MBC25';
 import { PACK_ID_BITS } from './PackIdBitmask';
-import { simpleButtonEvent } from "UI_SimpleButtonEvent";
+import { NotificationEvent } from "UI_SimpleButtonEvent";
 
 /**
  * Coordinates exclusive access to MBC25 machines.
@@ -18,15 +17,15 @@ import { simpleButtonEvent } from "UI_SimpleButtonEvent";
  */
 class MBCManager extends hz.Component<typeof MBCManager> {
     static propsDefinition = {
-        // No configurable props are exposed currently.
+        notificationManager: { type: hz.PropTypes.Entity, default: null },
     };
 
     /** Pack identifier for the live machine, or null when nothing is active. */
     private activePack: string | null = null;
     /** Name of the performer currently in control, or null when unclaimed. */
-    private controllingPlayer: string | null = null;
-    /** Timeout handles tracking AFK relinquish countdowns per player. */
-    private afkTimeouts = new Map<string, number>();
+    private controllingPlayerName: string | null = null;
+    /** The performer currently in control, or null when unclaimed. */
+    private controllingPlayer: hz.Player | null = null;
 
     /**
      * Persistent storage key shared with MBC25Inventory for pack ownership tracking.
@@ -49,42 +48,51 @@ class MBCManager extends hz.Component<typeof MBCManager> {
         return bit !== undefined && (mask & bit) !== 0;
     }
 
-    private clearAfkTimeout(playerName: string): void {
-        const timeoutId = this.afkTimeouts.get(playerName);
-        if (timeoutId !== undefined) {
-            this.async.clearTimeout(timeoutId);
-            this.afkTimeouts.delete(playerName);
+    /**
+     * Trigger the UI notification pop-up for the given recipients. When no recipients are provided the
+     * message is shown to everyone in the world. Falls back to logging when the manager is not available.
+     */
+    private triggerUiNotification(message: string, recipients?: hz.Player[]): void {
+        const targets =
+            recipients && recipients.length > 0 ? recipients : this.world.getPlayers();
+        for (const target of targets) {
+            console.log(`[Notification to ${target.name.get()}] ${message}`);
         }
+
+        const payload = {
+            message,
+            players: targets,
+            imageAssetId: null as string | null,
+        };
+
+        if (this.props.notificationManager) {
+            this.sendLocalEvent(this.props.notificationManager, NotificationEvent, payload);
+        }
+
+        this.sendLocalBroadcastEvent(NotificationEvent, payload);
     }
 
-    private forfeitControlCountdown(player: hz.Player | undefined): void {
+    private forfeitControlCountdown(player: hz.Player | null): void {
+
+        // if no player data sent when the function is called - automatic release occurs
         if (!player) {
            this.sendLocalBroadcastEvent(relinquishMBC, { playerName: null }); 
         }
 
         const playerName = player!.name.get();
-        if (playerName !== this.controllingPlayer!){
-            return;
-        }
 
-        this.clearAfkTimeout(playerName);
-
-        const timeoutId = this.async.setTimeout(() => {
-            if (playerName === this.controllingPlayer) {
-                console.log(
-                    `MBCManager: ${playerName} has been AFK for 60 seconds. Releasing control.`
+        if (this.controllingPlayer === null) {
+            console.log(
+                    `MBCManager: ${playerName} releasing control.`
                 );
                 this.sendLocalBroadcastEvent(relinquishMBC, { playerName: null });
                 this.activePack = null;
-                this.controllingPlayer = null;
+                this.controllingPlayerName = null;
                 this.sendLocalBroadcastEvent(changeActiveMBC, { packId: '' });
                 this.sendLocalBroadcastEvent(activePerformerChanged, { playerName: null });
                 this.sendLocalBroadcastEvent(machinePlayState, { isPlaying: false });
-            }
-            this.afkTimeouts.delete(playerName);
-        }, 60_000);
+        }
 
-        this.afkTimeouts.set(playerName, timeoutId);
     }
 
     private isPlayerInWorld(player: hz.Player) {
@@ -92,10 +100,6 @@ class MBCManager extends hz.Component<typeof MBCManager> {
             !player.isInBuildMode.get()
     }
 
-    private cancelAfkCountdown(player: hz.Player): void {
-        const playerName = player.name.get();
-        this.clearAfkTimeout(playerName);
-    }
 
     preStart() {
         // Accept activation requests from UI and script callers.
@@ -103,26 +107,26 @@ class MBCManager extends hz.Component<typeof MBCManager> {
             this.entity!,
             requestMBCActivation,
             ({ playerName, packId }) => {
+                const player = this.world.getPlayers().find(p => p.name.get() === playerName);
+                const requestingPlayers: hz.Player[] = player ? [player] : [];
                 if (!this.playerHasUnlocked(playerName, packId)) {
-                    console.log(
-                        `MBCManager: ${playerName} tried to activate pack '${packId}', but they do not own it.`
-                    );
+                    // shouldn't ever occur, this is an extra guardrail.
+                    this.triggerUiNotification(`You do not own the '${packId}' sound pack. You must unlock it first.`, requestingPlayers);
                     return;
                 }
                 // Allow the current performer to swap packs without releasing control.
                 if (
                     !this.activePack ||
-                    this.controllingPlayer === null ||
-                    this.controllingPlayer === playerName
+                    this.controllingPlayerName === null ||
+                    this.controllingPlayerName === playerName
                 ) {
-                    this.clearAfkTimeout(playerName);
                     this.activePack = packId;
-                    this.controllingPlayer = playerName;
+                    this.controllingPlayerName = playerName;
                     this.sendLocalBroadcastEvent(changeActiveMBC, { packId });
                     this.sendLocalBroadcastEvent(activePerformerChanged, { playerName });
                 } else {
                     console.log(
-                        `MBCManager: Machine already in use by ${this.controllingPlayer}. Request by ${playerName} ignored.`
+                        `MBCManager: Machine already in use by ${this.controllingPlayerName}. Request by ${playerName} ignored.`
                     );
                 }
             }
@@ -133,13 +137,25 @@ class MBCManager extends hz.Component<typeof MBCManager> {
             this.entity!,
             relinquishMBC,
             ({ playerName }) => {
-                if ((this.controllingPlayer === playerName) && (playerName != null)) {
+                const player = this.world.getPlayers().find(p => p.name.get() === playerName);
+                const requestingPlayer: hz.Player[] = player ? [player] : [];
+
+                if (this.controllingPlayerName == null) {
+                    if (this.activePack != null) {
+                        this.activePack = null;
+                        this.controllingPlayerName = null;
+                        this.sendLocalBroadcastEvent(changeActiveMBC, { packId: '' });
+                        this.sendLocalBroadcastEvent(activePerformerChanged, { playerName: null } );
+                        this.sendLocalBroadcastEvent(machinePlayState, { isPlaying: false });
+                    } else {
+                        this.triggerUiNotification("No active MBC25 found to put away!", requestingPlayer);
+                    }
+                } else if ((this.controllingPlayerName === playerName)) {
                     console.log(
                         `MBCManager: ${playerName} relinquished the MBC25 control.`
                     );
-                    this.clearAfkTimeout(playerName);
                     this.activePack = null;
-                    this.controllingPlayer = null;
+                    this.controllingPlayerName = null;
                     this.sendLocalBroadcastEvent(changeActiveMBC, { packId: '' });
                     this.sendLocalBroadcastEvent(activePerformerChanged, { playerName: null } );
                     this.sendLocalBroadcastEvent(machinePlayState, { isPlaying: false });
@@ -149,7 +165,7 @@ class MBCManager extends hz.Component<typeof MBCManager> {
 
         this.connectLocalEvent(
             this.entity!,
-            askToRelinquishMBC,
+            relinquishMBC,
             ({ playerName }) => {
                 const player = this.world.getPlayers().find(p => p.name.get() === playerName);
 
@@ -165,11 +181,6 @@ class MBCManager extends hz.Component<typeof MBCManager> {
             this.entity!,
             hz.CodeBlockEvents.OnPlayerEnterAFK,
             this.forfeitControlCountdown,
-        );
-        this.connectCodeBlockEvent(
-            this.entity!,
-            hz.CodeBlockEvents.OnPlayerExitAFK,
-            this.cancelAfkCountdown,
         );
 
     }

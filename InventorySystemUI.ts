@@ -7,7 +7,6 @@ import {
     inventoryUpdated,
     soundwaveBalanceChanged,
     activePerformerChanged,
-    askToRelinquishMBC,
 } from './shared-events-MBC25';
 import {
     NotificationEvent
@@ -20,7 +19,7 @@ import { addDefaultPacks, maskToPackList } from './PackIdBitmask';
  */
 class InventorySystemUI extends UIComponent<typeof InventorySystemUI> {
     /** Panel height in pixels. */
-    protected panelHeight: number = 300;
+    protected panelHeight: number = 400;
     /** Panel width in pixels. */
     protected panelWidth: number = 500;
 
@@ -94,13 +93,13 @@ class InventorySystemUI extends UIComponent<typeof InventorySystemUI> {
             this.relinquishDisabled.set(false);
         } else {
             this.lockMessage.set(
-                `${controller} is using their MBC25. Wait for them to put it away or go AFK for 60 seconds.`
+                `${controller} is using their MBC25. Wait for them to put it away, leave the world, or start your own instance.`
             );
             this.spawnButtonsDisabled.set(true);
             this.relinquishDisabled.set(true);
             this.sendLocalEvent(
                 this.props.managerEntity!,
-                askToRelinquishMBC,
+                relinquishMBC,
                 { playerName: controller }
             )
         }

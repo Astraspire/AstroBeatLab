@@ -48,7 +48,7 @@ export const requestMBCActivation = new LocalEvent<{ playerName: string; packId:
 );
 
 /**
- * Indicates that the named player is done performing so the active machine can unlock.
+ * Unlocks if controlling player is not in world when called.
  * MBCManager clears its lock and hides the machine when this fires.
  */
 export const relinquishMBC = new LocalEvent<{ playerName: string | null}>(
@@ -59,9 +59,10 @@ export const relinquishMBC = new LocalEvent<{ playerName: string | null}>(
  * Asks if the named player is done performing so the active inventory can unlock.
  * MBCManager clears its lock and hides the machine when this fires.
  */
-export const askToRelinquishMBC = new LocalEvent<{ playerName: string }>(
-    'attemptToRelinquishActiveMBC25'
-);
+// DEPRECATED
+// export const askToRelinquishMBC = new LocalEvent<{ playerName: string }>(
+//     'attemptToRelinquishActiveMBC25'
+// );
 
 /**
  * Broadcast whenever performer ownership changes.
