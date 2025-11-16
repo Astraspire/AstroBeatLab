@@ -1,133 +1,112 @@
 # Astro Beat Lab
 
-Astro Beat Lab is a Horizon Worlds project that turns the MBC25 music machine into a modular live-performance space. The scripts in this repository coordinate machine ownership, loop playback, player inventory, and the soundwave currency that players spend to unlock new packs. This README orients newcomers to both the codebase and the Horizon Worlds APIs it uses.
+Astro Beat Lab turns the MBC25 music machine into a modular, live performance setup for Horizon Worlds. The scripts in this folder coordinate who can control the stage, which pack is visible, how loops stay in sync, and how the soundwave economy unlocks additional packs. This README captures everything that changed in the latest iteration so the codebase and the in-world build stay in sync.
 
-## Directory Guide
+## Repo Layout
 
-- `MBCManager.ts` – arbitrates exclusive control of the MBC25 machines and handles AFK relinquish logic.
-- `MBC25Inventory.ts` – persists unlocked packs, exposes unlock events, and tracks the active performer.
-- `InventorySystemUI.ts` – first-party UI listing unlocked packs and firing activation/relinquish requests.
-- `MBCDrop.ts` – spawns the correct machine asset when a pack becomes active.
-- `SoundwaveManager.ts` – awards soundwave points, processes purchases, and mirrors machine play state.
-- `SoundwaveStoreUI.ts` – storefront UI that spends soundwaves on packs.
-- `SoundwaveLeaderboard.ts` – writes soundwave balances to a world leaderboard.
-- `PackIdBitmask.ts` / `SoundPackTypes.ts` – utilities describing pack identifiers and their bitmask encoding.
-- `MBC25/` – loop playback system shared by all packs (`SongManager.ts`, trigger scripts, and loop-specific events).
-- Utility scripts (`CycleLightColor.ts`, `TriggerDetector.ts`, etc.) add ambient motion or helper logic.
+- `MBCManager.ts` – arbitrates exclusive control of the MBC25, enforces AFK relinquish, and mirrors notifications to performers.
+- `MBC25Inventory.ts` – persists unlocked packs per player, guarantees default packs are present, and emits `inventoryUpdated`.
+- `InventorySystemUI.ts` – refreshed inventory HUD with owner locking, refresh button, notification hooks, and direct calls into `MBCManager`.
+- `SoundwaveStoreUI.ts` – storefront that opens for a specific player, filters already-owned packs, and dispatches `purchasePackWithSoundwaves`.
+- `SoundwaveManager.ts` – awards soundwaves each minute while `machinePlayState` is true, tracks AFK listeners, forwards purchases to the inventory manager, and now drives toast notifications.
+- `SoundwaveLeaderboard.ts` – mirrors each player’s persistent balance (or a custom leaderboard key) into a world leaderboard, including late joins.
+- `MBCDrop.ts` – spawns the correct machine asset with configurable position/rotation/scale whenever ownership or inventory events change.
+- `MBC25/` – generic loop grid (`SongManager.ts`, `LoopButtonTrigger.ts`, `StopButtonTrigger.ts`, etc.) shared by every pack.
+- `shared-events-MBC25.ts` / `shared-events.ts` – canonical event definitions for ownership, store, notification, and loop-grid communication.
+- `UI_NotificationManager.ts` / `UI_SimpleButtonEvent.ts` – reusable notification rail used by the inventory, manager, and soundwave systems.
+- Utility scripts (`CircularMotion.ts`, `CycleLightColor.ts`, `DoorController.ts`, `ForceFirstPersonView.ts`, `TriggerDetector.ts`, etc.) provide ambience or helper behaviors you can reuse in the build.
 
-## Machine Activation & Inventory Flow
+## System Guides
 
-1. `InventorySystemUI.ts` gathers the viewer’s unlocked packs from the persistent key `MBC25Inventory:unlockedSoundPacks` and shows them as pressable rows.
-2. When the player selects a pack, the UI calls `requestMBCActivation` with their `playerName` and `packId`.
-3. `MBCManager.ts` verifies ownership by reading the bitmask in `MBC25Inventory:unlockedSoundPacks` (`SOUND_PACKS_PPV`) and ensures no other player controls the machine. Successful requests broadcast:
-   - `changeActiveMBC` so `MBCDrop.ts` can spawn the matching asset.
-   - `activePerformerChanged` so UI layers know who owns the machine.
-4. `MBCDrop.ts` responds to both `dropMBC` (unlocks) and `changeActiveMBC` (pack swaps) to despawn the old asset and spawn the requested one.
-5. Players earn new packs when `MBC25Inventory.ts` receives `unlockMBC25`. It updates the bitmask, emits `inventoryUpdated`, and optionally drops the new machine if no one is performing.
+### Inventory & Ownership Flow
 
-## Loop Playback Flow (Folder `MBC25/`)
+1. **Unlock tracking (`MBC25Inventory.ts`)**  
+   - Stores the player bitmask under `MBC25Inventory:unlockedSoundPacks`.  
+   - Ensures default packs (currently `MBC25-SOMETA`) are always present by rewriting the bitmask when needed.  
+   - Listens for `unlockMBC25` to persist new packs and rebroadcast `inventoryUpdated`.  
+   - Accepts `requestMBCActivation` to drop or swap packs while remembering the active performer.
+2. **Player-facing HUD (`InventorySystemUI.ts`)**  
+   - Binds the UI to the viewer’s unlocked packs, auto-refreshes on `inventoryUpdated` and `soundwaveBalanceChanged`, and exposes an explicit “Open/Refresh your inventory” button.  
+   - Locks the panel to whichever player opened it (`currentViewerName`), greys out spawn buttons when another performer owns the stage, and fires `relinquishMBC` when that performer leaves or the viewer taps “Put away your MBC25”.  
+   - Integrates with the notification manager so every spawn/relinquish or invalid action pushes an in-world toast.
+3. **Ownership arbitration (`MBCManager.ts`)**  
+   - Uses persistent storage plus `PACK_ID_BITS` to reject spawn requests for packs the player doesn’t own.  
+   - Announces state changes through `changeActiveMBC`, `activePerformerChanged`, and `machinePlayState`.  
+   - Listens for `relinquishMBC` both from the UI and AFK/exit code block events to automatically clear the stage when the performer is gone.  
+   - Calls into the notification UI whenever requests fail or succeed so everyone sees who owns the machine.
 
-- `LoopButtonTrigger.ts` listens for `loopTriggerEvent`, `offlineColorChangeEvent`, `playingColorChangeEvent`, and `upcomingLoopColorChangedEvent` to keep button tinting in sync with playback.
-- `SongManager.ts` maintains per-channel audio gizmo grids, kicks off playback via `gizmo.play()`, and keeps loops locked to tempo using a scheduler. It relies on:
-  - `loopTriggerEvent` fired when a player steps off a loop pad.
-  - `stopRowEvent` raised by `StopButtonTrigger.ts` to cut a channel with `gizmo.stop({ fade })`.
-  - `machinePlayState` to inform the broader world (and the soundwave system) when music is audible.
-- `StopButtonTrigger.ts` simply forwards trigger exits through `stopRowEvent`.
+### Machine Spawning & Playback
 
-## Soundwave Economy Flow
+- **Asset swapping (`MBCDrop.ts`)** – Hooks into `dropMBC` and `changeActiveMBC`, despawns old assets, and spawns the keyed asset bundle using the configured stage transform. Keeps a list of previously spawned roots so the stage never accumulates duplicates.
+- **Loop grid (`MBC25/` folder)** –  
+  - `SongManager.ts` wires every gizmo slot, keeps loops on tempo, fires button color events, and is now the canonical source of `machinePlayState`.  
+  - `LoopButtonTrigger.ts` and `StopButtonTrigger.ts` translate trigger exits into loop or stop events, while animating button colors between idle, upcoming, and playing states.  
+  - `shared-events.ts` contains the event definitions consumed by these scripts to keep communication consistent across packs.
 
-1. `SoundwaveManager.ts` maintains per-player balances under the persistent key `SoundwaveManager:points` (`SOUNDWAVE_PPV`). Every minute while the machine plays (`machinePlayState.isPlaying === true`), it:
-   - Awards +1 point to every non-AFK listener.
-   - Gives the active performer (`activePerformerChanged`) a bonus equal to the listener count minus one.
-2. Purchases flow from `SoundwaveStoreUI.ts` via the `purchasePackWithSoundwaves` event. The manager debits the balance, unlocks the pack by calling `unlockMBC25`, and broadcasts `soundwaveBalanceChanged`.
-3. `SoundwaveStoreUI.ts` keeps its listings up to date by listening for `soundwaveBalanceChanged` and `inventoryUpdated`. Its local `STORE_PACKS` array defines pack costs.
-4. `SoundwaveLeaderboard.ts` mirrors `SoundwaveManager:points` onto a world leaderboard whenever `soundwaveBalanceChanged` fires or a player joins mid-session.
+### Soundwave Economy
+
+1. **Point accrual (`SoundwaveManager.ts`)**  
+   - Tracks `machinePlayState` to decide when minute ticks should run.  
+   - Award loop: +1 to non-AFK listeners, bonus equal to listener count (minus one) to the performer, with listener/perf toasts only firing once per session.  
+   - Maintains `SoundwaveManager:points`, broadcasts `soundwaveBalanceChanged`, and emits notification pop-ups like “You’re now earning Soundwaves!”.
+2. **Purchases & unlocks**  
+   - `SoundwaveStoreUI.ts` listens for `soundwaveBalanceChanged`, `inventoryUpdated`, and `openSoundwaveStore` to filter its `STORE_PACKS` list per player.  
+   - Purchase presses send `purchasePackWithSoundwaves` to the manager, which debits the persistent balance then fires `unlockMBC25` back into the inventory manager.  
+   - Both inventory and store UIs call `addDefaultPacks` when reading storage so mixes stay in sync regardless of unlock order.
+3. **Leaderboard mirroring (`SoundwaveLeaderboard.ts`)**  
+   - Pushes every balance change to a world leaderboard (configurable via prop), and syncs values when players join mid-session.
+
+### Notification Layer
+
+- `UI_NotificationManager.ts` consumes `NotificationEvent`, animates the toast rail, and can be triggered locally or via broadcast.
+- `InventorySystemUI`, `MBCManager`, and `SoundwaveManager` all send `NotificationEvent` payloads so performers always get feedback (spawn success, store unlock, soundwave accrual, etc.).
+- `UI_SimpleButtonEvent.ts` remains available for designers who want to trigger notification tests from the RocketTrouble “UI Simple Button” prefab.
+
+### Utility / Helper Scripts
+
+- `CircularMotion.ts`, `CycleLightColor.ts`, `SoftHover.ts` – simple animation helpers to add ambient motion.  
+- `DoorController.ts`, `ForceFirstPersonView.ts` – environmental helpers for the Beat Lab shell.  
+- `TriggerDetector.ts`, `UI_NotificationManager.ts` (above) – reusable bits that other worlds can borrow.
 
 ## Event Reference
 
 ### `shared-events-MBC25.ts`
 
+| Event | Payload | Fired By | Purpose |
+| --- | --- | --- | --- |
+| `changeActiveMBC` | `{ packId }` | `MBCManager` | Tells `MBCDrop` (and any VFX) which pack should currently be visible. |
+| `unlockMBC25` | `{ playerName, packId }` | `SoundwaveManager`, in-world unlock triggers | Persists the unlock and rebroadcasts inventory/swap events. |
+| `checkMBCInventory` | `{ playerId }` | QA triggers | Dumps inventory contents to the console. |
+| `dropMBC` | `{ packId }` | `MBC25Inventory` | Immediately spawn a newly unlocked pack without changing active ownership. |
+| `inventoryUpdated` | `{ playerName }` | `MBC25Inventory` | Refreshes UI bindings whenever a player’s bitmask changes. |
+| `requestMBCActivation` | `{ playerName, packId }` | `InventorySystemUI` | Performer asks to control the stage with a specific pack. |
+| `relinquishMBC` | `{ playerName \| null }` | Inventory UI, AFK/exit handlers | Releases control (null indicates an automatic release). |
+| `activePerformerChanged` | `{ playerName \| null }` | `MBCManager` | Lets UI, store, and soundwave systems know who is on stage. |
+| `uiOwnerChanged` | `{ playerName \| null }` | Reserved for UI handoff | Optionally reassigns store/inventory ownership without reopening the panel. |
+| `purchasePackWithSoundwaves` | `{ playerName, packId, cost }` | `SoundwaveStoreUI` | Debits the buyer and requests an unlock. |
+| `soundwaveBalanceChanged` | `{ playerName, balance }` | `SoundwaveManager` | Keeps HUDs, stores, and leaderboards in sync with persistent storage. |
+| `openSoundwaveStore` | `{ player }` | In-world triggers or buttons | Shows the store only to the requesting player. |
+| `machinePlayState` | `{ isPlaying }` | `SongManager` / `MBCManager` | Single source of truth for “is any loop audible,” used by the soundwave economy and VFX. |
+
+### `shared-events.ts` (Loop Grid)
+
 | Event | Payload | Purpose |
 | --- | --- | --- |
-| `changeActiveMBC` | `{ packId }` | Signals which pack should be visible across the world. |
-| `unlockMBC25` | `{ playerName, packId }` | Adds a pack to a player’s persistent inventory. |
-| `checkMBCInventory` | `{ playerId }` | Debug helper that prints a player’s inventory and triggers drops. |
-| `dropMBC` | `{ packId }` | Instructs `MBCDrop` instances to spawn the matching machine. |
-| `inventoryUpdated` | `{ playerName }` | Tells UIs to refresh when ownership changes. |
-| `requestMBCActivation` | `{ playerName, packId }` | Player requests to control the machine with a specific pack. |
-| `relinquishMBC` | `{ playerName }` | Player gives up the machine so others can take over. |
-| `activePerformerChanged` | `{ playerName }` | Broadcasts performer swaps; `null` means unclaimed. |
-| `uiOwnerChanged` | `{ playerName }` | Lets the store UI know who it should display data for. |
-| `purchasePackWithSoundwaves` | `{ playerName, packId, cost }` | Store UI purchase submission. |
-| `soundwaveBalanceChanged` | `{ playerName, balance }` | Sends updated balances to UI and leaderboards. |
-| `openSoundwaveStore` | `{ player }` | Requests the store UI become visible for a player. |
-| `machinePlayState` | `{ isPlaying }` | Indicates whether the MBC25 is currently audible. |
+| `loopTriggerEvent` | `{ channelId, loopSectionId }` | Fired when a player steps off a loop trigger; starts or queues the loop. |
+| `stopRowEvent` | `{ channelId }` | Stops every loop on the channel (stop buttons or scripted failsafes). |
+| `offlineColorChangeEvent` | `{ channel, loopId }` | Returns a button to its idle color when another loop replaces it. |
+| `hardOfflineColorChangeEvent` | `{ channel, loopId }` | Forces idle color immediately (used before resyncing all loops). |
+| `playingColorChangeEvent` | `{ channel, loopId }` | Highlights the currently playing button. |
+| `upcomingLoopColorChangedEvent` | `{ channel, loopId }` | Marks a button as queued to enter on the next measure. |
 
-### `MBC25/shared-events.ts`
+## Persistent Storage Keys
 
-| Event | Payload | Purpose |
-| --- | --- | --- |
-| `stopRowEvent` | `{ channelId }` | Stops all loops on a channel. |
-| `loopTriggerEvent` | `{ channelId, loopSectionId }` | Queues or starts a loop on the specified channel. |
-| `offlineColorChangeEvent` | `{ channel, loopId }` | Returns a button to its idle tint. |
-| `hardOfflineColorChangeEvent` | `{ channel, loopId }` | Forces idle tint during resets. |
-| `playingColorChangeEvent` | `{ channel, loopId }` | Highlights a button as actively playing. |
-| `upcomingLoopColorChangedEvent` | `{ channel, loopId }` | Marks a button as queued for the next bar. |
-| `machinePlayState` | `{ isPlaying }` | Mirrors the pack-level event for loop controllers. |
+- `MBC25Inventory:unlockedSoundPacks` – bitmask where each `PACK_ID_BITS` entry marks an unlocked pack. Both UIs run `addDefaultPacks` whenever they read this value so the stored mask stays forward-compatible.
+- `SoundwaveManager:points` – per-player soundwave balance. Synced to the leaderboard (when configured) and broadcast through `soundwaveBalanceChanged` after every update.
 
-## Persistent Storage Keys & Utilities
+## Implementation Notes
 
-| Key / Utility | Location | Notes |
-| --- | --- | --- |
-| `MBC25Inventory:unlockedSoundPacks` (`SOUND_PACKS_PPV`) | `MBC25Inventory.ts`, `MBCManager.ts`, `InventorySystemUI.ts` | Bitmask of unlocked packs per player. Converted using `PACK_ID_BITS` in `PackIdBitmask.ts`. |
-| `SoundwaveManager:points` (`SOUNDWAVE_PPV`) | `SoundwaveManager.ts`, `SoundwaveStoreUI.ts`, `SoundwaveLeaderboard.ts` | Integer balance of soundwave points per player. |
-| `PACK_ID_BITS` / `DEFAULT_PACK_IDS` | `PackIdBitmask.ts` | Map pack identifiers to bit positions and define always-on packs. |
-| `STORE_PACKS` | `SoundwaveStoreUI.ts` | Lists purchasable packs with their cost in soundwaves. |
-
-When adding a new pack you must update `PACK_ID_BITS`, `DEFAULT_PACK_IDS` (if it should be free), `MBCDrop.ts` asset mappings, `SoundwaveStoreUI.ts` pricing, and ensure audio gizmos exist in `SongManager.ts`.
-
-## Horizon Worlds API Primer
-
-- `hz.Component` subclasses drive behaviour. Their `propsDefinition` exposes editor-facing configuration.
-- `connectLocalBroadcastEvent` listens for world-wide events sent via `sendLocalBroadcastEvent`.
-- `connectLocalEvent` targets events scoped to a specific entity, while `connectNetworkEvent` deals with network-replicated events.
-- `connectCodeBlockEvent` taps into built-in trigger/AFK callbacks defined by Horizon Worlds.
-- The `async` helper (`setTimeout`, `setInterval`, `clearTimeout`, `clearInterval`) schedules work safely inside the Horizon scripting sandbox.
-- Use `.as(Type)` to cast entities to gizmo-specific interfaces such as `AudioGizmo` or `MeshEntity` before accessing their properties.
-
-## Wiring the World
-
-1. **MBC Manager stack**
-   - Attach `MBCManager.ts` to a central entity.
-   - Attach `MBC25Inventory.ts` and point its events at the same entity.
-   - Place `MBCDrop.ts` on each machine spawn point and assign the variant assets.
-2. **UI**
-   - Set `InventorySystemUI.ts -> managerEntity` to the entity running `MBCManager.ts`.
-   - Set `SoundwaveStoreUI.ts -> managerEntity` to the entity running `SoundwaveManager.ts`.
-3. **Loop controller**
-   - Wire the audio gizmo references (`chanXLoopY`) in `SongManager.ts`.
-   - Ensure each loop pad entity runs `LoopButtonTrigger.ts` with matching `channelId` & `loopSectionId`.
-   - Hook stop pads to `StopButtonTrigger.ts` with the appropriate `channelId`.
-4. **Economy**
-   - Attach `SoundwaveManager.ts` and optionally assign a notification manager entity.
-   - Add `SoundwaveLeaderboard.ts` if you want the leaderboard UI to stay in sync.
-
-## Extending the Experience
-
-1. **Add a new pack variant**
-   - Create the new audio gizmos and machine asset bundle.
-   - Add its identifier to `PACK_ID_BITS`, map the asset in `MBCDrop.ts`, and include it in `STORE_PACKS` if purchasable.
-2. **Introduce new reward sources**
-   - Call `setBalance` or `sendLocalBroadcastEvent(soundwaveBalanceChanged, …)` from your script to award points.
-   - Keep `SoundwaveManager` as the single authority so persistent storage stays consistent.
-3. **Customize notifications**
-   - Implement a notification entity that consumes `NotificationEvent` (see `SoundwaveManager.ts`) for richer UI feedback.
-
-## Debugging Tips
-
-- Every major state change logs to the console (activation requests, loop scheduling, soundwave awards). Use the in-world console to trace behaviour.
-- To inspect a player’s inventory manually, trigger `checkMBCInventory` (e.g., via a debug trigger) to print unlocked packs.
-- `SoundwaveManager.ts` clears its listener/performance toast sets when playback pauses; if notifications feel stale, ensure `machinePlayState` is firing.
-
-With this overview you should be able to trace how events propagate through the system, extend the machine with new content, and orient yourself even if Horizon Worlds scripting is new territory. Happy building!
-
+- Assign the `managerEntity` prop on both UI components to the entity running `MBCManager` or `SoundwaveManager` respectively so button presses reach the right scripts.
+- Hook `notificationManager` on Inventory UI and `NotificationManager` on Soundwave Manager to the `UI_NotificationManager` entity; both scripts fall back to console logs if it is missing.
+- `SoundwaveStoreUI` defaults to visible-on-open only. Use triggers or interactables that fire `openSoundwaveStore` so the UI pops locally instead of globally.
+- When authoring new packs, update `PACK_ID_BITS`, `DEFAULT_PACK_IDS`, the store’s `STORE_PACKS` array, and any art references inside `MBCDrop` to keep everything aligned.
