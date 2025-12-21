@@ -40,7 +40,8 @@ class SoundwaveStoreUI extends UIComponent<typeof SoundwaveStoreUI> {
     private readonly STORE_PACKS = [
         { packId: 'MBC25-SOMETA', cost: 0 },
         { packId: 'MBC25-LUCKY', cost: 25 },
-        { packId: 'MBC25-PHONK-E-CHEESE', cost: 100},
+        { packId: 'MBC25-PHONK-E-CHEESE', cost: 50 },
+        { packId: 'MBC25-FLOWSTATE', cost: 50 },
     ];
 
     /** Returns the active shopper when tracked, otherwise falls back to the first connected player. */
@@ -82,7 +83,6 @@ class SoundwaveStoreUI extends UIComponent<typeof SoundwaveStoreUI> {
             inventoryUpdated,
             ({ playerName }) => {
                 if (playerName === this.uiOwner) {
-                    console.log(`[SoundwaveStoreUI] inventory updated for ${playerName}`);
                     this.refreshStoreList(playerName);
                 }
             }
@@ -94,7 +94,6 @@ class SoundwaveStoreUI extends UIComponent<typeof SoundwaveStoreUI> {
             openSoundwaveStore,
             ({ player }: { player: Player }) => {
                 const playerName = player?.name.get() ?? '';
-                console.log(`[SoundwaveStoreUI] open event received for ${playerName || 'unknown player'}.`);
                 if (playerName) {
                     this.uiOwner = playerName;
                 }
@@ -103,7 +102,6 @@ class SoundwaveStoreUI extends UIComponent<typeof SoundwaveStoreUI> {
                     this.entity.setVisibilityForPlayers([player], hz.PlayerVisibilityMode.VisibleTo);
                 }
                 this.entity.visible.set(true);
-                console.log(`[SoundwaveStoreUI] set visible for ${this.uiOwner || 'unknown owner'}; visible=${this.entity.visible.get()}.`);
                 this.refreshStoreList(this.uiOwner);
             }
         );
@@ -141,8 +139,6 @@ class SoundwaveStoreUI extends UIComponent<typeof SoundwaveStoreUI> {
 
         this.uiOwner = resolvedName ?? '';
 
-        console.log(`[SoundwaveStoreUI] refreshing for ${this.uiOwner || 'n/a'}; players=${players.map(p => p.name.get()).join(',')}`);
-
         if (!resolvedName) {
             this.balance = 0;
             this.balanceText.set('No player in the world');
@@ -160,17 +156,14 @@ class SoundwaveStoreUI extends UIComponent<typeof SoundwaveStoreUI> {
         if (available.length > 0) {
             this.storeData.set(available);
             this.emptyMessage.set('');
-            console.log(`[SoundwaveStoreUI] available packs: ${available.map(p => p.packId).join(', ')}`);
         } else {
             this.storeData.set([]);
             this.emptyMessage.set('No packs available for purchase.');
-            console.log('[SoundwaveStoreUI] no packs available.');
         }
     }
 
     /** Constructs the store layout and binds UI interactions. */
     initializeUI(): UINode {
-        console.log('[SoundwaveStoreUI] initializeUI called.');
         return View({
             children: [
                 Text({

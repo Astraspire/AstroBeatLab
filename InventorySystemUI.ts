@@ -145,9 +145,6 @@ class InventorySystemUI extends UIComponent<typeof InventorySystemUI> {
     private triggerUiNotification(message: string, recipients?: Player[]): void {
         const targets =
             recipients && recipients.length > 0 ? recipients : this.world.getPlayers();
-        for (const target of targets) {
-            console.log(`[Notification to ${target.name.get()}] ${message}`);
-        }
 
         const payload = {
             message,

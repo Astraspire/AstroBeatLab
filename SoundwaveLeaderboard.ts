@@ -79,9 +79,6 @@ class SoundwaveLeaderboard extends hz.Component<typeof SoundwaveLeaderboard> {
 
         const sanitizedScore = this.sanitizeScore(balance);
         leaderboards.setScoreForPlayer(leaderboardName, player, sanitizedScore, true);
-        console.log(
-            `[SoundwaveLeaderboard] Set ${leaderboardName} score for ${player.name.get()} to ${sanitizedScore}.`
-        );
     }
 
     /** Clamp leaderboard scores to the supported range. */

@@ -25,7 +25,7 @@ class UI_NotificationManager extends UIComponent<typeof UI_NotificationManager> 
   };
 
   //region bindings defined
-  private bndAlertImg = new Binding<ImageSource>("");
+  private bndAlertImg = new Binding<ImageSource | null>(null);
   private bndAlertMsg = new Binding<string>("You're now earning Soundwaves!\nKeep jamming!");
   private animBnd_translateX = new AnimatedBinding(-1000);
 

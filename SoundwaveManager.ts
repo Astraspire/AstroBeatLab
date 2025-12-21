@@ -64,7 +64,6 @@ export default class SoundwaveManager extends hz.Component<typeof SoundwaveManag
         opts: { text: string; position: { horizontal: 'left' | 'right'; vertical: 'top' | 'bottom' } }
     ): void {
         // Horizon does not expose a toast API, so log until UI notifications are wired.
-        console.log(`[Notification to ${player.name.get()}] ${opts.text}`);
     }
 
     /**
@@ -74,9 +73,6 @@ export default class SoundwaveManager extends hz.Component<typeof SoundwaveManag
     private triggerUiNotification(message: string, recipients?: Player[]): void {
         const targets =
             recipients && recipients.length > 0 ? recipients : this.world.getPlayers();
-        for (const target of targets) {
-            console.log(`[Notification to ${target.name.get()}] ${message}`);
-        }
 
         const payload = {
             message,
@@ -111,22 +107,15 @@ export default class SoundwaveManager extends hz.Component<typeof SoundwaveManag
     /** Award points every minute to active players. */
     private awardPoints = () => {
         // Log tick cadence for debugging and ensure the machine is flagged as playing.
-        console.log(
-            `[Soundwave] awardPoints tick - machinePlaying=${this.machinePlaying}`
-        );
         if (!this.machinePlaying) return;
         const players = this.world.getPlayers();
         const active = players.filter(p => !this.afkPlayers.has(p.name.get()));
-        console.log(
-            `[Soundwave] active listeners this tick: ${active.length} / ${players.length}`
-        );
 
         // Give every active listener one point per minute.
         for (const p of active) {
             const newBal = this.getBalance(p) + 1;
             this.setBalance(p, newBal);
             // Surface the increment so designers can validate the accrual rate.
-            console.log(`[Soundwave] ${p.name.get()} earned 1 point (total: ${newBal}).`);
             this.showNotification(p, {
                 text: `+1 soundwave (total ${newBal})`,
                 position: { horizontal: 'left', vertical: 'top' },
@@ -145,7 +134,6 @@ export default class SoundwaveManager extends hz.Component<typeof SoundwaveManag
                 if (listeners > 0) {
                     const newBal = this.getBalance(performer) + listeners;
                     this.setBalance(performer, newBal);
-                    console.log(`[Soundwave] ${performer.name.get()} earned ${listeners} bonus point(s) (total: ${newBal}).`);
                     this.showNotification(performer, {
                         text: `+${listeners} soundwave${listeners > 1 ? 's' : ''} (total ${newBal})`,
                         position: { horizontal: 'left', vertical: 'bottom' },
@@ -167,7 +155,6 @@ export default class SoundwaveManager extends hz.Component<typeof SoundwaveManag
         if (!player) return;
         const balance = this.getBalance(player);
         if (balance < cost) {
-            console.log(`${playerName} lacks soundwaves for ${packId}.`);
             return;
         }
         this.setBalance(player, balance - cost);
@@ -222,8 +209,6 @@ export default class SoundwaveManager extends hz.Component<typeof SoundwaveManag
                 this.listenerToastShown.clear();
                 this.performerToastShown.clear();
             }
-
-            console.log(`MBC25 machine is now ${isPlaying ? 'playing' : 'stopped'}.`);
         });
 
         // Remember who is performing to apply the bonus multiplier.

@@ -9,7 +9,7 @@ import { Quaternion } from 'horizon/core';
  */
 
 /** String literal union matching the configured asset props. */
-type MachineKey = 'MBC25-LUCKY' | 'MBC25-SOMETA' | 'MBC25-PHONK-E-CHEESE';
+type MachineKey = 'MBC25-LUCKY' | 'MBC25-SOMETA' | 'MBC25-PHONK-E-CHEESE' | 'MBC25-FLOWSTATE';
 
 export class MBCDrop extends hz.Component<typeof MBCDrop> {
     static propsDefinition = {
@@ -19,6 +19,8 @@ export class MBCDrop extends hz.Component<typeof MBCDrop> {
         soMetaMBC25: { type: hz.PropTypes.Asset },
         /** Asset bundle for the Phonk-E-Cheese machine variant. */
         pEcMBC25: { type: hz.PropTypes.Asset },
+        /** Asset bundle for the FlowState machine variant. */
+        flowStateMBC25: { type: hz.PropTypes.Asset },
 
         stagePos: { type: hz.PropTypes.Vec3, default: new hz.Vec3(0, 0, 0) },
         stageRot: { type: hz.PropTypes.Quaternion, default: Quaternion.one },
@@ -28,8 +30,6 @@ export class MBCDrop extends hz.Component<typeof MBCDrop> {
 
     /** Cached world position used when spawning machines. */
     private initialLocal!: hz.Vec3;
-    /** Optional handle for tween update subscriptions. */
-    private updateSub!: hz.EventSubscription;
     private spawnedRoots: hz.Entity[] = [] // stores a list of all previously mbc's spawned into world
     private currentRoot?: hz.Entity; // Root entity for the spawned machine.
     private currentKey?: string; // Tracks which pack is currently live.
@@ -80,6 +80,7 @@ export class MBCDrop extends hz.Component<typeof MBCDrop> {
             case 'MBC25-LUCKY': return this.props.luckyMBC25;
             case 'MBC25-SOMETA': return this.props.soMetaMBC25;
             case 'MBC25-PHONK-E-CHEESE': return this.props.pEcMBC25;
+            case 'MBC25-FLOWSTATE': return this.props.flowStateMBC25;
         }
     }
 
