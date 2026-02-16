@@ -2,6 +2,15 @@
 
 Astro Beat Lab turns the MBC25 music machine into a modular, live performance setup for Horizon Worlds. The scripts in this folder coordinate who can control the stage, which pack is visible, how loops stay in sync, and how the soundwave economy unlocks additional packs. This README captures everything that changed in the latest iteration so the codebase and the in-world build stay in sync.
 
+## Available Packs
+
+The system currently supports four MBC25 sound packs:
+
+- **MBC25-SOMETA** – Default pack, automatically unlocked for all players
+- **MBC25-LUCKY** – Purchasable from the Soundwave Store for 25 soundwaves
+- **MBC25-PHONK-E-CHEESE** – Purchasable from the Soundwave Store for 50 soundwaves
+- **MBC25-FLOWSTATE** – Unlocked by completing the Orbital Drop-stacle Course (or purchasable for 50 soundwaves)
+
 ## Repo Layout
 
 - `MBCManager.ts` – arbitrates exclusive control of the MBC25, enforces AFK relinquish, and mirrors notifications to performers.
@@ -14,6 +23,8 @@ Astro Beat Lab turns the MBC25 music machine into a modular, live performance se
 - `MBC25/` – generic loop grid (`SongManager.ts`, `LoopButtonTrigger.ts`, `StopButtonTrigger.ts`, etc.) shared by every pack.
 - `shared-events-MBC25.ts` / `shared-events.ts` – canonical event definitions for ownership, store, notification, and loop-grid communication.
 - `UI_NotificationManager.ts` / `UI_SimpleButtonEvent.ts` – reusable notification rail used by the inventory, manager, and soundwave systems.
+- `CompleteDropObbyReward.ts` – awards the FlowState pack when players complete the Orbital Drop-stacle Course, tracks completion state, and sends congratulatory notifications.
+- `dropstacleSpawnTrigger.ts` – teleports players back to the respawn point when they enter fail zones during the dropstacle course.
 - Utility scripts (`CircularMotion.ts`, `CycleLightColor.ts`, `DoorController.ts`, `ForceFirstPersonView.ts`, `TriggerDetector.ts`, etc.) provide ambience or helper behaviors you can reuse in the build.
 
 ## System Guides
@@ -60,7 +71,25 @@ Astro Beat Lab turns the MBC25 music machine into a modular, live performance se
 
 - `UI_NotificationManager.ts` consumes `NotificationEvent`, animates the toast rail, and can be triggered locally or via broadcast.
 - `InventorySystemUI`, `MBCManager`, and `SoundwaveManager` all send `NotificationEvent` payloads so performers always get feedback (spawn success, store unlock, soundwave accrual, etc.).
-- `UI_SimpleButtonEvent.ts` remains available for designers who want to trigger notification tests from the RocketTrouble “UI Simple Button” prefab.
+- `UI_SimpleButtonEvent.ts` remains available for designers who want to trigger notification tests from the RocketTrouble "UI Simple Button" prefab.
+
+### Orbital Drop-stacle Course
+
+The Orbital Drop-stacle Course is an in-world challenge that rewards players with the exclusive FlowState pack upon completion.
+
+1. **Reward system (`CompleteDropObbyReward.ts`)**  
+   - Attach this component to the completion trigger at the end of the course.  
+   - When a player enters the trigger, it automatically unlocks `MBC25-FLOWSTATE` and sets the `ODO_Complete` achievement.  
+   - Maintains a session-based list of players who have beaten the course to differentiate first-time vs. repeat completions.  
+   - First-time completers receive: "Congratulations! You've just unlocked the FlowState MBC25!"  
+   - Repeat completers receive: "Interstellar! You've just completed the Orbital Drop-stacle Course!"  
+   - Configure the `notificationManager` prop to display toast notifications through the UI notification system.
+
+2. **Respawn handling (`dropstacleSpawnTrigger.ts`)**  
+   - Place this component on fail zone triggers throughout the course (e.g., under platforms where players might fall).  
+   - Configure the `respawnGizmo` prop to reference a Spawn Point Gizmo at the course start or a checkpoint.  
+   - When a player enters a fail zone trigger, they're instantly teleported back to retry the section.  
+   - Keeps the course playable without requiring manual respawning or world resets.
 
 ### Utility / Helper Scripts
 
@@ -110,3 +139,4 @@ Astro Beat Lab turns the MBC25 music machine into a modular, live performance se
 - Hook `notificationManager` on Inventory UI and `NotificationManager` on Soundwave Manager to the `UI_NotificationManager` entity; both scripts fall back to console logs if it is missing.
 - `SoundwaveStoreUI` defaults to visible-on-open only. Use triggers or interactables that fire `openSoundwaveStore` so the UI pops locally instead of globally.
 - When authoring new packs, update `PACK_ID_BITS`, `DEFAULT_PACK_IDS`, the store’s `STORE_PACKS` array, and any art references inside `MBCDrop` to keep everything aligned.
+- For the Orbital Drop-stacle Course: attach `CompleteDropObbyReward` to the completion trigger with `notificationManager` configured, and attach `dropstacleSpawnTrigger` to fail zone triggers with `respawnGizmo` pointing to the appropriate spawn point.
